@@ -1,0 +1,32 @@
+{
+    "title": "Scene Router",
+    "entity": {
+        "scene": {
+            "scene": {
+                "name": "Scene"
+            }
+        },
+        "sensor": {
+            "selected_scene": {
+                "name": "Selected Scene"
+            },
+            "selected_scene_entity_id": {
+                "name": "Selected Scene Entity ID"
+            }
+        },
+        "number": {
+            "lux_above": {
+                "name": "Lux Above"
+            },
+            "lux_below": {
+                "name": "Lux Below"
+            },
+            "elevation_above": {
+                "name": "Elevation Above"
+            },
+            "elevation_below": {
+                "name": "Elevation Below"
+            }
+        }
+    }
+}

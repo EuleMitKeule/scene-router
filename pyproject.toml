@@ -1,0 +1,62 @@
+[project]
+name = "scene-router"
+authors = [{ name = "Lennard Beers", email = "l.beers@outlook.de" }]
+maintainers = [{ name = "Lennard Beers", email = "l.beers@outlook.de" }]
+license = { file = "LICENSE.md" }
+keywords = [
+    "homeassistant",
+    "custom-component",
+    "scene-router",
+    "scene",
+    "tools",
+    "integration",
+    "home-assistant",
+    "home-assistant-custom-component",
+    "home-assistant-integration",
+    "home-assistant-integration",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Users",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+description = "A custom component for Home Assistant to create and modify devices."
+readme = "README.md"
+requires-python = ">=3.13.2"
+version = "0.0.0"
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "homeassistant>=2025.6.3",
+    "homeassistant-stubs",
+    "voluptuous-stubs",
+]
+
+[project.urls]
+Repository = "https://github.com/eulemitkeule/scene-router"
+Documentation = "https://github.com/eulemitkeule/scene-router/blob/master/README.md"
+Changelog = "https://github.com/EuleMitKeule/scene-router/releases"
+Issues = "https://github.com/eulemitkeule/scene-router/issues"
+
+[tool.mypy]
+check_untyped_defs = true
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff.lint]
+select = ["D", "ARG"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"!custom_components/scene-router/**.py" = ["D"]

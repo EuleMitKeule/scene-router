@@ -1,0 +1,10 @@
+{
+    "domain": "scene_router",
+    "name": "Scene Router",
+    "codeowners": ["@EuleMitKeule"],
+    "config_flow": true,
+    "documentation": "https://github.com/eulemitkeule/scene-router",
+    "iot_class": "calculated",
+    "issue_tracker": "https://github.com/eulemitkeule/scene-router/issues",
+    "version": "0.0.0"
+}

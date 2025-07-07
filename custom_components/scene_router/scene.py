@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from config.custom_components.scene_router.entity import SceneRouterEntity
 from homeassistant.components.scene import DOMAIN as SCENE_DOMAIN, Scene as SceneEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DATA_SCENE_ROUTERS, DOMAIN
+from .const import DATA_COORDINATORS, DATA_SCENE_ROUTERS, DOMAIN
+from .coordinator import SceneRouterCoordinator
+from .entity import SceneRouterEntity, SceneRouterEntityDescription
 from .scene_router import SceneRouter
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,27 +25,24 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up scene platform for Scene Router integration."""
-    scene_routers: list[SceneRouter] = hass.data.get(DOMAIN, {}).get(
-        DATA_SCENE_ROUTERS, []
-    )
+    data: dict[str, Any] = hass.data[DOMAIN]
+    scene_routers: dict[str, SceneRouter] = data[DATA_SCENE_ROUTERS]
+    coordinators: dict[str, SceneRouterCoordinator] = data[DATA_COORDINATORS]
 
-    if not scene_routers:
-        _LOGGER.debug(
-            "No SceneRouter instances found in hass.data, skipping scene platform"
-        )
-        return
+    scene_router = scene_routers[config_entry.entry_id]
+    coordinator = coordinators[config_entry.entry_id]
 
     async_add_entities(
         [
             SceneRouterSceneEntity(
                 config_entry,
-                router,
-                EntityDescription(
+                scene_router,
+                coordinator,
+                SceneRouterEntityDescription(
                     key="scene",
                     translation_key="scene",
                 ),
             )
-            for router in scene_routers
         ]
     )
 
@@ -56,7 +54,7 @@ class SceneRouterSceneEntity(SceneRouterEntity, SceneEntity):
 
     async def async_activate(self) -> None:
         """Activate scene."""
-        target = self.router.selected_scene()
+        target, _ = await self.scene_router.selected_scene
 
         if not target:
             _LOGGER.warning("SceneRouter '%s' returned no scene", self.entity_id)
@@ -74,3 +72,17 @@ class SceneRouterSceneEntity(SceneRouterEntity, SceneEntity):
             {CONF_ENTITY_ID: target},
             blocking=True,
         )
+
+    def _handle_coordinator_update(self) -> None:
+        if self.scene_router.scene_router_config.enable_auto_change:
+            if any(
+                self.hass.states.get(light_entity_id).state == "on"
+                for light_entity_id in self.scene_router.scene_router_config.light_entities
+            ):
+                _LOGGER.debug(
+                    "SceneRouter '%s' auto changing scene due to light state",
+                    self.entity_id,
+                )
+                self.hass.async_create_task(self.async_activate())
+
+        return super()._handle_coordinator_update()

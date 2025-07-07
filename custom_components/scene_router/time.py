@@ -1,20 +1,21 @@
-"""Number platform for Scene Router integration."""
+"""Time platform for Scene Router integration."""
 
 from dataclasses import dataclass
+from datetime import time
 import logging
 from typing import Any
 
-from homeassistant.components.number import (
-    DOMAIN as NUMBER_DOMAIN,
-    NumberEntity,
-    NumberEntityDescription,
-    NumberMode,
+from homeassistant.components.time import (
+    DOMAIN as TIME_DOMAIN,
+    TimeEntity,
+    TimeEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import DEGREE, EntityCategory
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.storage import Store
 
 from .const import (
@@ -37,12 +38,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
-class SceneRouterNumberEntityDescription(
-    SceneRouterConditionEntityDescription, NumberEntityDescription
+class SceneRouterTimeEntityDescription(
+    SceneRouterConditionEntityDescription, TimeEntityDescription
 ):
-    """Number entity description for Scene Router integration."""
+    """Time entity description for Scene Router integration."""
 
-    domain: str = NUMBER_DOMAIN
+    domain: str = TIME_DOMAIN
 
 
 async def async_setup_entry(
@@ -50,18 +51,18 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up number platform for Scene Router integration."""
-    _LOGGER.debug("Setting up number platform for Scene Router integration")
+    """Set up time platform for Scene Router integration."""
+    _LOGGER.debug("Setting up time platform for Scene Router integration")
 
     data: dict[str, Any] = hass.data[DOMAIN]
     scene_routers: dict[str, SceneRouter] = data[DATA_SCENE_ROUTERS]
     coordinators: dict[str, SceneRouterCoordinator] = data[DATA_COORDINATORS]
-    store: Store = data[DATA_STORE]
+    store: Store = data.get(DATA_STORE)
 
     scene_router = scene_routers[config_entry.entry_id]
     coordinator = coordinators[config_entry.entry_id]
 
-    entity_descriptions: list[NumberEntityDescription] = []
+    entity_descriptions: list[TimeEntityDescription] = []
 
     for scene_config in scene_router.scene_router_config.scene_configs:
         scene_entity_id = scene_config.scene
@@ -75,12 +76,12 @@ async def async_setup_entry(
 
         for condition in scene_config.conditions:
             if condition not in [
-                ConditionType.SUN_ABOVE,
-                ConditionType.SUN_BELOW,
+                ConditionType.TIME_AFTER,
+                ConditionType.TIME_BEFORE,
             ]:
                 continue
 
-            entity_description = SceneRouterNumberEntityDescription(
+            entity_description = SceneRouterTimeEntityDescription(
                 key=_get_entity_key(
                     scene_router.scene_router_config.name,
                     scene_entity_id,
@@ -91,18 +92,13 @@ async def async_setup_entry(
                     "scene": scene.name,
                 },
                 entity_category=EntityCategory.CONFIG,
-                native_min_value=-90.0,
-                native_max_value=90.0,
-                native_step=1.0,
-                native_unit_of_measurement=DEGREE,
-                mode=NumberMode.BOX,
                 condition_type=condition,
                 scene_entity_id=scene_entity_id,
             )
             entity_descriptions.append(entity_description)
 
     async_add_entities(
-        SceneRouterNumberEntity(
+        SceneRouterTimeEntity(
             store,
             config_entry,
             scene_router,
@@ -113,26 +109,28 @@ async def async_setup_entry(
     )
 
 
-class SceneRouterNumberEntity(SceneRouterConditionEntity, NumberEntity):
-    """Number entity for Scene Router integration."""
+class SceneRouterTimeEntity(SceneRouterConditionEntity, TimeEntity, RestoreEntity):
+    """Time entity for Scene Router integration."""
 
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added to hass."""
         await super().async_added_to_hass()
 
         data: dict[str, Any] = await self.store.async_load()
-        self._attr_native_value = data.get(self.entity_description.key, 0.0)
+        self._attr_native_value = time.fromisoformat(
+            data.get(self.entity_description.key, time().isoformat())
+        )
 
-    async def async_set_native_value(self, value: float) -> None:
-        """Set new value."""
+    async def async_set_value(self, value: time) -> None:
+        """Change the time."""
         _LOGGER.debug(
-            "Setting number for SceneRouter '%s' to '%s'",
+            "Setting time for SceneRouter '%s' to '%s'",
             self.scene_router.scene_router_config.name,
             value,
         )
 
         data: dict[str, Any] = await self.store.async_load()
-        data[self.entity_description.key] = value
+        data[self.entity_description.key] = value.isoformat()
         await self.store.async_save(data)
         self._attr_native_value = value
 

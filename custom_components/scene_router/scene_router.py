@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import (
+    condition as condition_helper,
+    config_validation as cv,
+    device_registry as dr,
+)
+from homeassistant.helpers.entity import Entity
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
-from .models import SceneRouterConfig
+from .const import DOMAIN, ConditionType
+from .models import SceneConfig, SceneRouterConfig
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,87 +29,170 @@ class SceneRouter:
         self,
         hass: HomeAssistant,
         config_entry: ConfigEntry,
-        config: SceneRouterConfig,
     ) -> None:
         """Initialize the SceneRouter."""
         self.hass = hass
-        self.config = config
+        self.config_entry = config_entry
+        self.scene_router_config: SceneRouterConfig = SceneRouterConfig.from_dict(
+            config_entry.options
+        )
+        self.condition_entities: dict[str, dict[ConditionType, Entity]] = {}
 
-        if config.enable_device:
-            dr.async_get(hass).async_get_or_create(
-                config_entry_id=config_entry.entry_id,
-                **self.device_info,
-            )
+        dr.async_get(hass).async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            **self.device_info,
+        )
 
-        _LOGGER.debug("SceneRouter initialized for router '%s'", config.name)
+        _LOGGER.debug(
+            "SceneRouter initialized for router '%s'", self.scene_router_config.name
+        )
 
     @property
     def device_info(self) -> dr.DeviceInfo:
         """Return the device information for this scene router."""
         return dr.DeviceInfo(
-            identifiers={(DOMAIN, self.config.name)},
-            name=self.config.name,
+            identifiers={(DOMAIN, self.config_entry.entry_id)},
+            name=self.scene_router_config.name,
         )
 
     @property
-    def selected_scene_entity_id(self) -> str | None:
+    async def selected_scene_entity_id(self) -> str | None:
         """Return the currently selected scene entity ID."""
-        entity_id, _ = self.selected_scene()
+        entity_id, _ = await self.selected_scene
         if not entity_id:
-            _LOGGER.warning("SceneRouter '%s' has no selected scene", self.config.name)
+            _LOGGER.warning(
+                "SceneRouter '%s' has no selected scene", self.scene_router_config.name
+            )
             return None
         _LOGGER.debug(
-            "SceneRouter '%s' selected scene: '%s'", self.config.name, entity_id
+            "SceneRouter '%s' selected scene: '%s'",
+            self.scene_router_config.name,
+            entity_id,
         )
         return entity_id
 
     @property
-    def selected_scene_friendly_name(self) -> str | None:
+    async def selected_scene_friendly_name(self) -> str | None:
         """Return the currently selected scene friendly name."""
-        _, friendly_name = self.selected_scene()
+        _, friendly_name = await self.selected_scene
         if not friendly_name:
-            _LOGGER.warning("SceneRouter '%s' has no selected scene", self.config.name)
+            _LOGGER.warning(
+                "SceneRouter '%s' has no selected scene", self.scene_router_config.name
+            )
             return None
         _LOGGER.debug(
-            "SceneRouter '%s' selected scene: '%s'", self.config.name, friendly_name
+            "SceneRouter '%s' selected scene: '%s'",
+            self.scene_router_config.name,
+            friendly_name,
         )
         return friendly_name
 
+    async def _evaluate_custom(self, cfg: dict[str, Any]) -> bool:
+        """Compile & evaluate a Home Assistant custom condition dict asynchronously."""
+        _LOGGER.debug(
+            "Evaluating custom condition: %s for scene: %s",
+            cfg,
+            self.scene_router_config.name,
+        )
+        _LOGGER.debug(
+            "cfg type: %s, cfg: %s",
+            type(cfg),
+            cfg,
+        )
+        cfg = cv.CONDITION_SCHEMA(cfg)
+        config = await condition_helper.async_validate_condition_config(self.hass, cfg)
+        test = await condition_helper.async_from_config(self.hass, config)
+        result = test(self.hass, {})
+        if asyncio.iscoroutine(result):
+            result = await result
+        _LOGGER.debug(
+            "Custom condition result for scene '%s': %s",
+            self.scene_router_config.name,
+            result,
+        )
+        return bool(result)
+
     @property
-    def selected_scene(self) -> tuple[str, str] | None:
-        """Return the currently selected scene."""
-        if not self.config.scenes:
-            _LOGGER.warning(
-                "No scenes configured for scene router '%s'", self.config.name
-            )
+    async def selected_scene(self) -> tuple[str, str] | None:
+        """Asynchronously select the best scene based on required, forcing, and builtin conditions."""
+        raw_candidates: list[tuple[SceneConfig, int, bool]] = []
+
+        for cfg in self.scene_router_config.scene_configs:
+            # 1) required_custom_conditions
+            if cfg.required_custom_conditions:
+                results = await asyncio.gather(
+                    *(
+                        self._evaluate_custom(cond)
+                        for cond in cfg.required_custom_conditions
+                    )
+                )
+                if not all(results):
+                    continue
+
+            # 2) forcing_custom_conditions
+            if cfg.forcing_custom_conditions:
+                results = await asyncio.gather(
+                    *(
+                        self._evaluate_custom(cond)
+                        for cond in cfg.forcing_custom_conditions
+                    )
+                )
+                forced = any(results)
+            else:
+                forced = False
+
+            # Builtin conditions match count
+            matched = 0
+            for condition in cfg.conditions:
+                # SUN_ABOVE / SUN_BELOW
+                if condition in (ConditionType.SUN_ABOVE, ConditionType.SUN_BELOW):
+                    ent = self.condition_entities.get(cfg.scene, {}).get(condition)
+                    try:
+                        threshold = float(ent.state)
+                    except (ValueError, TypeError):
+                        continue
+                    sun = self.hass.states.get("sun.sun")
+                    if not sun:
+                        continue
+                    elevation = sun.attributes.get("elevation")
+                    if elevation is None:
+                        continue
+                    if condition == ConditionType.SUN_ABOVE and elevation > threshold:
+                        matched += 1
+                    if condition == ConditionType.SUN_BELOW and elevation < threshold:
+                        matched += 1
+
+                # TIME_AFTER / TIME_BEFORE
+                if condition in (ConditionType.TIME_AFTER, ConditionType.TIME_BEFORE):
+                    ent = self.condition_entities.get(cfg.scene, {}).get(condition)
+                    if not ent or not ent.state:
+                        continue
+                    now = dt_util.now().time()
+                    thresh = dt_util.parse_time(ent.state)
+                    if not thresh:
+                        continue
+                    if condition == ConditionType.TIME_BEFORE and now < thresh:
+                        matched += 1
+                    if condition == ConditionType.TIME_AFTER and now > thresh:
+                        matched += 1
+
+            raw_candidates.append((cfg, matched, forced))
+
+        if not raw_candidates:
             return None
 
-        # TODO: Implement logic to select the scene
+        # If any forced scenes exist, only consider those
+        forced_list = [item for item in raw_candidates if item[2]]
+        candidates = forced_list if forced_list else raw_candidates
 
-        first_scene = self.config.scenes[0].scene
-        _LOGGER.debug(
-            "SceneRouter '%s' select_scene -> '%s'",
-            self.config.name,
-            first_scene,
+        # Pick the scene with the highest matched count
+        best_cfg, _, _ = max(candidates, key=lambda x: x[1])
+
+        state = self.hass.states.get(best_cfg.scene)
+        entity_id = best_cfg.scene
+        friendly = (
+            state.attributes.get("friendly_name")
+            if state and state.attributes.get("friendly_name")
+            else entity_id
         )
-
-        scene = self.hass.states.get(first_scene)
-
-        if not scene:
-            _LOGGER.warning(
-                "Scene '%s' not found in Home Assistant",
-                first_scene,
-            )
-            return None
-
-        entity_id = scene.entity_id
-        friendly_name = scene.attributes.get("friendly_name", first_scene) or entity_id
-
-        _LOGGER.debug(
-            "SceneRouter '%s' found scene '%s' with entity_id '%s'",
-            self.config.name,
-            friendly_name,
-            entity_id,
-        )
-
-        return entity_id, friendly_name
+        return entity_id, friendly

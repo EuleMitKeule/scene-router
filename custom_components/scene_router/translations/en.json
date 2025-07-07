@@ -15,17 +15,19 @@
             }
         },
         "number": {
-            "lux_above": {
-                "name": "Lux Above"
+            "sun_above": {
+                "name": "{scene} Sun Above"
             },
-            "lux_below": {
-                "name": "Lux Below"
+            "sun_below": {
+                "name": "{scene} Sun Below"
+            }
+        },
+        "time": {
+            "time_before": {
+                "name": "{scene} Time Before"
             },
-            "elevation_above": {
-                "name": "Elevation Above"
-            },
-            "elevation_below": {
-                "name": "Elevation Below"
+            "time_after": {
+                "name": "{scene} Time After"
             }
         }
     }

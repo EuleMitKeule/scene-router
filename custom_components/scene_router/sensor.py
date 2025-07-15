@@ -54,11 +54,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensor platform for Scene Router integration."""
     data: dict[str, Any] = hass.data[DOMAIN]
-    scene_routers: dict[str, SceneRouter] = data[DATA_SCENE_ROUTERS]
-    coordinators: dict[str, SceneRouterCoordinator] = data[DATA_COORDINATORS]
-
-    scene_router = scene_routers[config_entry.entry_id]
-    coordinator = coordinators[config_entry.entry_id]
+    scene_router: SceneRouter = data[DATA_SCENE_ROUTERS][config_entry.entry_id]
+    coordinator: SceneRouterCoordinator = data[DATA_COORDINATORS][config_entry.entry_id]
 
     async_add_entities(
         SceneRouterSensorEntity(

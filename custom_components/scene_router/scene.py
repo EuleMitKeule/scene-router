@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.components.scene import DOMAIN as SCENE_DOMAIN, Scene as SceneEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITY_ID
+from homeassistant.const import CONF_ENTITY_ID, SERVICE_TURN_ON, STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -26,11 +26,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up scene platform for Scene Router integration."""
     data: dict[str, Any] = hass.data[DOMAIN]
-    scene_routers: dict[str, SceneRouter] = data[DATA_SCENE_ROUTERS]
-    coordinators: dict[str, SceneRouterCoordinator] = data[DATA_COORDINATORS]
-
-    scene_router = scene_routers[config_entry.entry_id]
-    coordinator = coordinators[config_entry.entry_id]
+    scene_router: SceneRouter = data[DATA_SCENE_ROUTERS][config_entry.entry_id]
+    coordinator: SceneRouterCoordinator = data[DATA_COORDINATORS][config_entry.entry_id]
 
     async_add_entities(
         [
@@ -54,21 +51,13 @@ class SceneRouterSceneEntity(SceneRouterEntity, SceneEntity):
 
     async def async_activate(self) -> None:
         """Activate scene."""
-        target, _ = await self.scene_router.selected_scene
-
-        if not target:
+        if not (target := await self.scene_router.selected_scene_entity_id):
             _LOGGER.warning("SceneRouter '%s' returned no scene", self.entity_id)
             return
 
-        _LOGGER.debug(
-            "SceneRouter '%s' activating target scene '%s'",
-            self.entity_id,
-            target,
-        )
-
         await self.hass.services.async_call(
             SCENE_DOMAIN,
-            "turn_on",
+            SERVICE_TURN_ON,
             {CONF_ENTITY_ID: target},
             blocking=True,
         )
@@ -76,7 +65,8 @@ class SceneRouterSceneEntity(SceneRouterEntity, SceneEntity):
     def _handle_coordinator_update(self) -> None:
         if self.scene_router.scene_router_config.enable_auto_change:
             if any(
-                self.hass.states.get(light_entity_id).state == "on"
+                (state := self.hass.states.get(light_entity_id))
+                and state.state == STATE_ON
                 for light_entity_id in self.scene_router.scene_router_config.light_entities
             ):
                 _LOGGER.debug(

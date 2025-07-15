@@ -55,22 +55,16 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up time platform for Scene Router integration")
 
     data: dict[str, Any] = hass.data[DOMAIN]
-    scene_routers: dict[str, SceneRouter] = data[DATA_SCENE_ROUTERS]
-    coordinators: dict[str, SceneRouterCoordinator] = data[DATA_COORDINATORS]
+    scene_router: SceneRouter = data[DATA_SCENE_ROUTERS][config_entry.entry_id]
+    coordinator: SceneRouterCoordinator = data[DATA_COORDINATORS][config_entry.entry_id]
     store: Store = data.get(DATA_STORE)
-
-    scene_router = scene_routers[config_entry.entry_id]
-    coordinator = coordinators[config_entry.entry_id]
-
     entity_descriptions: list[TimeEntityDescription] = []
 
     for scene_config in scene_router.scene_router_config.scene_configs:
-        scene_entity_id = scene_config.scene
-        scene = er.async_get(hass).async_get(scene_entity_id)
-        if not scene:
+        if not (scene := er.async_get(hass).async_get(scene_config.scene)):
             _LOGGER.warning(
                 "Scene '%s' not found in entity registry, skipping conditions",
-                scene_entity_id,
+                scene_config.scene,
             )
             continue
 
@@ -84,16 +78,16 @@ async def async_setup_entry(
             entity_description = SceneRouterTimeEntityDescription(
                 key=_get_entity_key(
                     scene_router.scene_router_config.name,
-                    scene_entity_id,
+                    scene_config.scene,
                     condition,
                 ),
                 translation_key=_get_translation_key(condition),
                 translation_placeholders={
-                    "scene": scene.name or scene.original_name or scene_entity_id,
+                    "scene": scene.name or scene.original_name or scene_config.scene,
                 },
                 entity_category=EntityCategory.CONFIG,
                 condition_type=condition,
-                scene_entity_id=scene_entity_id,
+                scene_entity_id=scene_config.scene,
             )
             entity_descriptions.append(entity_description)
 

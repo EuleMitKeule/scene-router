@@ -1,0 +1,34 @@
+{
+    "title": "Scene Router",
+    "entity": {
+        "scene": {
+            "scene": {
+                "name": "Szene"
+            }
+        },
+        "sensor": {
+            "selected_scene": {
+                "name": "Ausgewählte Szene"
+            },
+            "selected_scene_entity_id": {
+                "name": "Ausgewählte Szenen-Entitäts-ID"
+            }
+        },
+        "number": {
+            "sun_above": {
+                "name": "{scene} Sonnenstand Über"
+            },
+            "sun_below": {
+                "name": "{scene} Sonnenstand Unter"
+            }
+        },
+        "time": {
+            "time_before": {
+                "name": "{scene} Uhrzeit Vor"
+            },
+            "time_after": {
+                "name": "{scene} Uhrzeit Nach"
+            }
+        }
+    }
+}

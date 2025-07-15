@@ -88,7 +88,7 @@ async def async_setup_entry(
                 ),
                 translation_key=_get_translation_key(condition),
                 translation_placeholders={
-                    "scene": scene.name,
+                    "scene": scene.name or scene.original_name or scene_entity_id,
                 },
                 entity_category=EntityCategory.CONFIG,
                 native_min_value=-90.0,

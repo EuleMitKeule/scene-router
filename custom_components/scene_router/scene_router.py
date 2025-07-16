@@ -161,37 +161,26 @@ class SceneRouter:
                     except (ValueError, TypeError):
                         continue
 
-                    sun = self.hass.states.get("sun.sun")
-                    if not sun:
-                        continue
-                    elevation = sun.attributes.get("elevation")
-                    if elevation is None:
-                        continue
-
-                    condition_met = (
-                        condition == ConditionType.SUN_ABOVE and elevation > threshold
-                    ) or (
-                        condition == ConditionType.SUN_BELOW and elevation < threshold
-                    )
-                    if condition_met:
-                        matched += 1
+                    try:
+                        location, _ = get_astral_location(self.hass)
                         direction = (
                             SunDirection.RISING
                             if condition == ConditionType.SUN_ABOVE
                             else SunDirection.SETTING
                         )
-                        try:
-                            location, _ = get_astral_location(self.hass)
-                            ev_time = time_at_elevation(
-                                location.observer,
-                                threshold,
-                                date=now_dt.date(),
-                                direction=direction,
-                                tzinfo=now_dt.tzinfo,
-                            )
-                            times.append(ev_time)
-                        except Exception:  # pragma: no cover - astronomic calc may fail
-                            pass
+                        ev_time = time_at_elevation(
+                            location.observer,
+                            threshold,
+                            date=now_dt.date(),
+                            direction=direction,
+                            tzinfo=now_dt.tzinfo,
+                        )
+                    except Exception:  # pragma: no cover - astronomic calc may fail
+                        continue
+
+                    if now_dt >= ev_time:
+                        matched += 1
+                        times.append(ev_time)
 
                 # TIME_AFTER / TIME_BEFORE
                 if condition in (ConditionType.TIME_AFTER, ConditionType.TIME_BEFORE):
@@ -199,13 +188,10 @@ class SceneRouter:
                     if not thresh:
                         continue
                     now_time = now_dt.time()
-                    if condition == ConditionType.TIME_AFTER and now_time > thresh:
+                    cond_dt = datetime.combine(now_dt.date(), thresh, tzinfo=now_dt.tzinfo)
+                    if condition == ConditionType.TIME_AFTER and now_time >= thresh:
                         matched += 1
-                        times.append(
-                            datetime.combine(
-                                now_dt.date(), thresh, tzinfo=now_dt.tzinfo
-                            )
-                        )
+                        times.append(cond_dt)
                     if condition == ConditionType.TIME_BEFORE and now_time < thresh:
                         matched += 1
                         times.append(dt_util.start_of_local_day())

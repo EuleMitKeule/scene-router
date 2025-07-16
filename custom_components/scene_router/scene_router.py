@@ -14,7 +14,10 @@ from homeassistant.helpers import (
     device_registry as dr,
 )
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.sun import get_astral_location
 from homeassistant.util import dt as dt_util
+from astral.sun import SunDirection, time_at_elevation
+from datetime import datetime
 
 from .const import DOMAIN, ConditionType
 from .models import SceneConfig, SceneRouterConfig
@@ -115,7 +118,7 @@ class SceneRouter:
     @property
     async def selected_scene(self) -> tuple[str, str] | None:
         """Asynchronously select the best scene based on required, forcing, and builtin conditions."""
-        raw_candidates: list[tuple[SceneConfig, int, bool]] = []
+        raw_candidates: list[tuple[SceneConfig, int, bool, datetime]] = []
 
         for cfg in self.scene_router_config.scene_configs:
             # 1) required_custom_conditions
@@ -143,40 +146,68 @@ class SceneRouter:
 
             # Builtin conditions match count
             matched = 0
+            times: list[datetime] = []
+            now_dt = dt_util.now()
+
             for condition in cfg.conditions:
+                ent = self.condition_entities.get(cfg.scene, {}).get(condition)
+                if not ent or ent.state in (None, ""):
+                    continue
+
                 # SUN_ABOVE / SUN_BELOW
                 if condition in (ConditionType.SUN_ABOVE, ConditionType.SUN_BELOW):
-                    ent = self.condition_entities.get(cfg.scene, {}).get(condition)
                     try:
                         threshold = float(ent.state)
                     except (ValueError, TypeError):
                         continue
+
                     sun = self.hass.states.get("sun.sun")
                     if not sun:
                         continue
                     elevation = sun.attributes.get("elevation")
                     if elevation is None:
                         continue
-                    if condition == ConditionType.SUN_ABOVE and elevation > threshold:
+
+                    condition_met = (
+                        condition == ConditionType.SUN_ABOVE and elevation > threshold
+                    ) or (
+                        condition == ConditionType.SUN_BELOW and elevation < threshold
+                    )
+                    if condition_met:
                         matched += 1
-                    if condition == ConditionType.SUN_BELOW and elevation < threshold:
-                        matched += 1
+                        direction = (
+                            SunDirection.RISING
+                            if condition == ConditionType.SUN_ABOVE
+                            else SunDirection.SETTING
+                        )
+                        try:
+                            location, _ = get_astral_location(self.hass)
+                            ev_time = time_at_elevation(
+                                location.observer,
+                                threshold,
+                                date=now_dt.date(),
+                                direction=direction,
+                                tzinfo=now_dt.tzinfo,
+                            )
+                            times.append(ev_time)
+                        except Exception:  # pragma: no cover - astronomic calc may fail
+                            pass
 
                 # TIME_AFTER / TIME_BEFORE
                 if condition in (ConditionType.TIME_AFTER, ConditionType.TIME_BEFORE):
-                    ent = self.condition_entities.get(cfg.scene, {}).get(condition)
-                    if not ent or not ent.state:
-                        continue
-                    now = dt_util.now().time()
                     thresh = dt_util.parse_time(ent.state)
                     if not thresh:
                         continue
-                    if condition == ConditionType.TIME_BEFORE and now < thresh:
+                    now_time = now_dt.time()
+                    if condition == ConditionType.TIME_AFTER and now_time > thresh:
                         matched += 1
-                    if condition == ConditionType.TIME_AFTER and now > thresh:
+                        times.append(datetime.combine(now_dt.date(), thresh))
+                    if condition == ConditionType.TIME_BEFORE and now_time < thresh:
                         matched += 1
+                        times.append(dt_util.start_of_local_day())
 
-            raw_candidates.append((cfg, matched, forced))
+            last_time = max(times) if times else dt_util.start_of_local_day()
+            raw_candidates.append((cfg, matched, forced, last_time))
 
         if not raw_candidates:
             return None
@@ -185,8 +216,12 @@ class SceneRouter:
         forced_list = [item for item in raw_candidates if item[2]]
         candidates = forced_list if forced_list else raw_candidates
 
-        # Pick the scene with the highest matched count
-        best_cfg, _, _ = max(candidates, key=lambda x: x[1])
+        # Pick the scene with the highest matched count and latest trigger time
+        max_matched = max(item[1] for item in candidates)
+        best_cfg, _, _, _ = max(
+            [item for item in candidates if item[1] == max_matched],
+            key=lambda x: x[3],
+        )
 
         state = self.hass.states.get(best_cfg.scene)
         entity_id = best_cfg.scene

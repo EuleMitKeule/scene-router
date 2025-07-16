@@ -201,7 +201,11 @@ class SceneRouter:
                     now_time = now_dt.time()
                     if condition == ConditionType.TIME_AFTER and now_time > thresh:
                         matched += 1
-                        times.append(datetime.combine(now_dt.date(), thresh))
+                        times.append(
+                            datetime.combine(
+                                now_dt.date(), thresh, tzinfo=now_dt.tzinfo
+                            )
+                        )
                     if condition == ConditionType.TIME_BEFORE and now_time < thresh:
                         matched += 1
                         times.append(dt_util.start_of_local_day())

@@ -1,5 +1,6 @@
 """Scene Router integration for Home Assistant."""
 
+import copy
 from functools import partial
 import logging
 from typing import Any
@@ -12,6 +13,10 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    CONF_CONDITION,
+    CONF_FORCING_CUSTOM_CONDITIONS,
+    CONF_REQUIRED_CUSTOM_CONDITIONS,
+    CONF_SCENE_CONFIGS,
     DATA_COORDINATORS,
     DATA_SCENE_ROUTERS,
     DATA_STORE,
@@ -137,3 +142,44 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
 async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Handle config entry removal."""
+
+
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    """Migrate old config entry to new format."""
+    _LOGGER.debug("Migrating Scene Router config entry %s", config_entry.entry_id)
+
+    if config_entry.version == 1:
+        _LOGGER.debug(
+            "Migrating Scene Router config entry %s from v1 to v2",
+            config_entry.entry_id,
+        )
+
+        options = copy.deepcopy(dict(config_entry.options))
+        scene_configs: list[dict[str, Any]] = options[CONF_SCENE_CONFIGS]
+        for scene_config in scene_configs:
+            conditions = scene_config.pop("conditions", [])
+            if not conditions:
+                raise ValueError(
+                    f"Scene config {scene_config} in entry {config_entry.entry_id} has no conditions"
+                )
+
+            if len(conditions) > 1:
+                _LOGGER.warning(
+                    "Scene config %s in entry %s has multiple conditions, only the first one will be used",
+                    scene_config,
+                    config_entry.entry_id,
+                )
+
+            scene_config[CONF_CONDITION] = conditions[0]
+            scene_config[CONF_FORCING_CUSTOM_CONDITIONS] = scene_config.pop(
+                "forcing_custom_condition", None
+            )
+            scene_config[CONF_REQUIRED_CUSTOM_CONDITIONS] = scene_config.pop(
+                "required_custom_condition", None
+            )
+
+        hass.config_entries.async_update_entry(
+            config_entry, data=config_entry.data, options=options
+        )
+
+    return True

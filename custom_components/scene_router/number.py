@@ -67,33 +67,29 @@ async def async_setup_entry(
             )
             continue
 
-        for condition in scene_config.conditions:
-            if condition not in [
-                ConditionType.SUN_ABOVE,
-                ConditionType.SUN_BELOW,
-            ]:
-                continue
+        if scene_config.condition != ConditionType.SUN_BELOW:
+            continue
 
-            entity_description = SceneRouterNumberEntityDescription(
-                key=_get_entity_key(
-                    scene_router.scene_router_config.name,
-                    scene_config.scene,
-                    condition,
-                ),
-                translation_key=_get_translation_key(condition),
-                translation_placeholders={
-                    "scene": scene.name or scene.original_name or scene_config.scene,
-                },
-                entity_category=EntityCategory.CONFIG,
-                native_min_value=-90.0,
-                native_max_value=90.0,
-                native_step=1.0,
-                native_unit_of_measurement=DEGREE,
-                mode=NumberMode.BOX,
-                condition_type=condition,
-                scene_entity_id=scene_config.scene,
-            )
-            entity_descriptions.append(entity_description)
+        entity_description = SceneRouterNumberEntityDescription(
+            key=_get_entity_key(
+                scene_router.scene_router_config.name,
+                scene_config.scene,
+                scene_config.condition,
+            ),
+            translation_key=_get_translation_key(scene_config.condition),
+            translation_placeholders={
+                "scene": scene.name or scene.original_name or scene_config.scene,
+            },
+            entity_category=EntityCategory.CONFIG,
+            native_min_value=-90.0,
+            native_max_value=90.0,
+            native_step=1.0,
+            native_unit_of_measurement=DEGREE,
+            mode=NumberMode.BOX,
+            condition_type=scene_config.condition,
+            scene_entity_id=scene_config.scene,
+        )
+        entity_descriptions.append(entity_description)
 
     async_add_entities(
         SceneRouterNumberEntity(

@@ -20,16 +20,16 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
-    CONF_CONDITIONS,
+    CONF_CONDITION,
     CONF_ENABLE_AUTO_CHANGE,
     CONF_ERROR_CONDITION_REQUIRED,
     CONF_ERROR_NO_LIGHT_ENTITIES,
     CONF_ERROR_NO_SCENE_CONFIGS,
     CONF_ERROR_SCENE_REQUIRED,
-    CONF_FORCING_CUSTOM_CONDITION,
+    CONF_FORCING_CUSTOM_CONDITIONS,
     CONF_LIGHT_ENTITIES,
     CONF_NAME,
-    CONF_REQUIRED_CUSTOM_CONDITION,
+    CONF_REQUIRED_CUSTOM_CONDITIONS,
     CONF_SCENE,
     CONF_SCENE_CONFIGS,
     DEFAULT_ENABLE_AUTO_CHANGE,
@@ -94,8 +94,8 @@ def _get_schema(
                                     }
                                 },
                             },
-                            CONF_CONDITIONS: {
-                                "label": CONF_CONDITIONS,
+                            CONF_CONDITION: {
+                                "label": CONF_CONDITION,
                                 "required": False,
                                 "selector": {
                                     "select": {
@@ -106,26 +106,26 @@ def _get_schema(
                                             }
                                             for condition_type in ConditionType
                                         ],
-                                        "multiple": True,
+                                        "multiple": False,
                                         "mode": "dropdown",
-                                        "translation_key": CONF_CONDITIONS,
+                                        "translation_key": CONF_CONDITION,
                                         "sort": True,
                                     },
                                 },
                             },
-                            CONF_REQUIRED_CUSTOM_CONDITION: {
-                                "label": CONF_REQUIRED_CUSTOM_CONDITION,
+                            CONF_REQUIRED_CUSTOM_CONDITIONS: {
+                                "label": CONF_REQUIRED_CUSTOM_CONDITIONS,
                                 "required": False,
                                 "selector": {"condition": {"multiple": True}},
                             },
-                            CONF_FORCING_CUSTOM_CONDITION: {
-                                "label": CONF_FORCING_CUSTOM_CONDITION,
+                            CONF_FORCING_CUSTOM_CONDITIONS: {
+                                "label": CONF_FORCING_CUSTOM_CONDITIONS,
                                 "required": False,
                                 "selector": {"condition": {"multiple": True}},
                             },
                         },
                         "label_field": CONF_SCENE,
-                        "description_field": CONF_CONDITIONS,
+                        "description_field": CONF_CONDITION,
                         "read_only": False,
                         "multiple": True,
                         "translation_key": CONF_SCENE_CONFIGS,
@@ -152,8 +152,8 @@ def _get_errors(user_input: dict[str, Any]) -> dict[str, str]:
 
         if not scene_config.get(CONF_SCENE):
             errors[CONF_SCENE_CONFIGS] = CONF_ERROR_SCENE_REQUIRED
-        if not scene_config.get(CONF_CONDITIONS) and not scene_config.get(
-            CONF_FORCING_CUSTOM_CONDITION
+        if not scene_config.get(CONF_CONDITION) and not scene_config.get(
+            CONF_FORCING_CUSTOM_CONDITIONS
         ):
             errors[CONF_SCENE_CONFIGS] = CONF_ERROR_CONDITION_REQUIRED
 
@@ -163,7 +163,7 @@ def _get_errors(user_input: dict[str, Any]) -> dict[str, str]:
 class SceneRouterConfigFlow(ConfigFlow, domain=DOMAIN):
     """Config flow for Scene Router integration."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

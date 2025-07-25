@@ -68,28 +68,24 @@ async def async_setup_entry(
             )
             continue
 
-        for condition in scene_config.conditions:
-            if condition not in [
-                ConditionType.TIME_AFTER,
-                ConditionType.TIME_BEFORE,
-            ]:
-                continue
+        if scene_config.condition != ConditionType.TIME_AFTER:
+            continue
 
-            entity_description = SceneRouterTimeEntityDescription(
-                key=_get_entity_key(
-                    scene_router.scene_router_config.name,
-                    scene_config.scene,
-                    condition,
-                ),
-                translation_key=_get_translation_key(condition),
-                translation_placeholders={
-                    "scene": scene.name or scene.original_name or scene_config.scene,
-                },
-                entity_category=EntityCategory.CONFIG,
-                condition_type=condition,
-                scene_entity_id=scene_config.scene,
-            )
-            entity_descriptions.append(entity_description)
+        entity_description = SceneRouterTimeEntityDescription(
+            key=_get_entity_key(
+                scene_router.scene_router_config.name,
+                scene_config.scene,
+                scene_config.condition,
+            ),
+            translation_key=_get_translation_key(scene_config.condition),
+            translation_placeholders={
+                "scene": scene.name or scene.original_name or scene_config.scene,
+            },
+            entity_category=EntityCategory.CONFIG,
+            condition_type=scene_config.condition,
+            scene_entity_id=scene_config.scene,
+        )
+        entity_descriptions.append(entity_description)
 
     async_add_entities(
         SceneRouterTimeEntity(

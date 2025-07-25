@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .const import (
-    CONF_CONDITIONS,
+    CONF_CONDITION,
     CONF_ENABLE_AUTO_CHANGE,
-    CONF_FORCING_CUSTOM_CONDITION,
+    CONF_FORCING_CUSTOM_CONDITIONS,
     CONF_LIGHT_ENTITIES,
     CONF_NAME,
-    CONF_REQUIRED_CUSTOM_CONDITION,
+    CONF_REQUIRED_CUSTOM_CONDITIONS,
     CONF_SCENE,
     CONF_SCENE_CONFIGS,
     DEFAULT_ENABLE_AUTO_CHANGE,
@@ -24,7 +24,7 @@ class SceneConfig:
     """Configuration for a scene in the Scene Router."""
 
     scene: str
-    conditions: list[ConditionType] = field(default_factory=list)
+    condition: ConditionType
     forcing_custom_conditions: list[dict[str, Any]] | None = None
     required_custom_conditions: list[dict[str, Any]] | None = None
 
@@ -33,11 +33,9 @@ class SceneConfig:
         """Create a SceneConfig from a dictionary."""
         return cls(
             scene=value[CONF_SCENE],
-            conditions=[
-                ConditionType(condition) for condition in value[CONF_CONDITIONS]
-            ],
-            forcing_custom_conditions=value.get(CONF_FORCING_CUSTOM_CONDITION),
-            required_custom_conditions=value.get(CONF_REQUIRED_CUSTOM_CONDITION),
+            condition=value[CONF_CONDITION],
+            forcing_custom_conditions=value.get(CONF_FORCING_CUSTOM_CONDITIONS),
+            required_custom_conditions=value.get(CONF_REQUIRED_CUSTOM_CONDITIONS),
         )
 
 

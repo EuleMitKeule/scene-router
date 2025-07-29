@@ -179,7 +179,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             )
 
         hass.config_entries.async_update_entry(
-            config_entry, data=config_entry.data, options=options
+            config_entry, data=config_entry.data, options=options, version=2
         )
 
     return True
